@@ -3,6 +3,7 @@ export const PAYPER_ABI = [
   "function createResource(uint256 price, bytes32 contentHash, string uri) external returns (uint256 id)",
   "function payForAccess(uint256 id) external payable returns (bool)",
   "function hasAccess(uint256 id, address who) external view returns (bool)",
+  "function resources(uint256 id) external view returns (address creator, uint256 price, bytes32 contentHash, string uri, bool active, uint256 totalEarned, uint256 accessCount)",
   "function deactivate(uint256 id) external",
   "event ResourceCreated(uint256 indexed id, address indexed creator, uint256 price, bytes32 contentHash, string uri)",
   "event AccessPaid(uint256 indexed id, address indexed payer, uint256 amount, uint256 accessCount)"

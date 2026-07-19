@@ -25,20 +25,32 @@ const ABI = [
   const context = await browser.newContext({ viewport: { width: 1100, height: 800 }, recordVideo: { dir: "demo", size: { width: 1100, height: 800 } } });
 
   // Inject the mock wallet BEFORE any page loads so the app's eager-reconnect fires on every navigation/reload.
-  await context.addInitScript((addr) => {
+  // Read calls (eth_call, eth_getBalance, block queries) are relayed to the real Monad RPC so contract reads
+  // like hasAccess() and resources() actually work in the recorded session.
+  await context.addInitScript(({ addr, rpc }) => {
+    const relay = async (method, params) => {
+      const r = await fetch(rpc, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params: params || [] }),
+      });
+      const j = await r.json();
+      if (j.error) throw new Error(j.error.message);
+      return j.result;
+    };
     window.ethereum = {
       isMetaMask: true,
       chainId: "0x279f",
       selectedAddress: addr,
-      request: async ({ method }) => {
+      request: async ({ method, params }) => {
         if (method === "eth_requestAccounts" || method === "eth_accounts") return [addr];
         if (method === "eth_chainId") return "0x279f";
         if (method === "wallet_switchEthereumChain") return null;
-        throw new Error("mock: " + method);
+        // relay everything else (eth_call, eth_getBalance, eth_blockNumber, net_version, etc.) to real RPC
+        return relay(method, params);
       },
       on: () => {},
     };
-  }, wallet.address);
+  }, { addr: wallet.address, rpc: RPC });
 
   const page = await context.newPage();
 
