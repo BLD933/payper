@@ -30,7 +30,7 @@ export default function App() {
         {tab === "create" ? (
           <CreateView signer={signer} account={account} chainOk={chainOk} error={error} setError={setError} />
         ) : (
-          <AccessView provider={provider} signer={signer} account={account} chainOk={chainOk} setError={setError} />
+          <AccessView provider={provider} signer={signer} account={account} chainOk={chainOk} error={error} setError={setError} />
         )}
       </main>
 
@@ -128,7 +128,7 @@ function CreateView({ signer, account, chainOk, error, setError }) {
   );
 }
 
-function AccessView({ provider, signer, account, chainOk, setError }) {
+function AccessView({ provider, signer, account, chainOk, error, setError }) {
   const [id, setId] = useState(new URLSearchParams(window.location.search).get("id") || "");
   const [info, setInfo] = useState(null);
   const [has, setHas] = useState(false);
