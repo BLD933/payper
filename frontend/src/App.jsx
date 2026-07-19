@@ -123,7 +123,7 @@ function CreateView({ signer, account, chainOk, error, setError }) {
       <label>title</label>
       <input placeholder="e.g. my secret trading prompt" value={title} onChange={(e) => setTitle(e.target.value)} />
       <label>gated content</label>
-      <textarea rows={6} placeholder="paste the content buyers will unlock…" value={content} onChange={(e) => setContent(e.target.value)} />
+      <textarea placeholder="paste the content buyers will unlock…" value={content} onChange={(e) => setContent(e.target.value)} />
       <label>price (MON)</label>
       <input type="number" step="0.001" min="0.001" value={price} onChange={(e) => setPrice(e.target.value)} />
       <button className="primary" disabled={busy} onClick={handleCreate}>

@@ -105,7 +105,7 @@ input, textarea {
   font-size: 15px; font-family: var(--body); resize: vertical;
 }
 input:focus, textarea:focus { outline: none; border-color: var(--purple); box-shadow: 0 0 0 4px rgba(139,92,246,0.25), 0 0 20px rgba(139,92,246,0.1); }
-textarea { font-family: var(--mono); font-size: 14px; line-height: 1.55; }
+textarea { font-family: var(--mono); font-size: 14px; line-height: 1.55; field-sizing: content; min-height: 44px; max-height: 60vh; padding: 12px; }
 .row { display: flex; gap: 8px; }
 .row input { flex: 1; }
 
