@@ -4,7 +4,12 @@
 import express from "express";
 import cors from "cors";
 import { ethers } from "ethers";
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_FILE = join(__dirname, "store.json");
 
 const app = express();
 app.use(cors());
@@ -15,18 +20,26 @@ let CONTRACT = process.env.CONTRACT_ADDRESS;
 try {
   const j = JSON.parse(readFileSync(new URL("../frontend/src/contract-address.json", import.meta.url)));
   if (j.PayPer && j.PayPer.startsWith("0x")) CONTRACT = j.PayPer;
-} catch {}
+} catch { }
 const ABI = [
   "function hasAccess(uint256 id, address who) external view returns (bool)",
   "function resources(uint256 id) external view returns (tuple(address creator,uint256 price,bytes32 contentHash,string uri,bool active,uint256 totalEarned,uint256 accessCount))",
 ];
 
-const store = new Map(); // id -> { title, content, creator }
+// Persist to disk so content survives restarts / free-tier cold starts.
+const store = new Map();
+if (existsSync(DATA_FILE)) {
+  try { Object.entries(JSON.parse(readFileSync(DATA_FILE, "utf8"))).forEach(([k, v]) => store.set(k, v)); } catch { }
+}
+function persist() {
+  try { writeFileSync(DATA_FILE, JSON.stringify(Object.fromEntries(store))); } catch { }
+}
 
 app.post("/api/resource", (req, res) => {
   const { id, title, content, creator } = req.body || {};
   if (!id) return res.status(400).json({ error: "id required" });
   store.set(String(id), { title, content, creator });
+  persist();
   res.json({ ok: true });
 });
 
@@ -48,5 +61,7 @@ app.get("/api/resource/:id", async (req, res) => {
   }
 });
 
+app.get("/", (_req, res) => res.json({ ok: true, service: "payper-content", resources: store.size }));
+
 const PORT = process.env.PORT || 8787;
-app.listen(PORT, () => console.log(`PayPer content server on :${PORT}`));
+app.listen(PORT, () => console.log(`PayPer content server on :${PORT} (${store.size} resources)`));
