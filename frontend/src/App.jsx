@@ -28,7 +28,7 @@ export default function App() {
 
       <main>
         {tab === "create" ? (
-          <CreateView signer={signer} account={account} chainOk={chainOk} setError={setError} />
+          <CreateView signer={signer} account={account} chainOk={chainOk} error={error} setError={setError} />
         ) : (
           <AccessView provider={provider} signer={signer} account={account} chainOk={chainOk} setError={setError} />
         )}
@@ -51,7 +51,12 @@ function WalletBadge({ account, chainOk, error, onConnect, onSwitch }) {
   );
 }
 
-function CreateView({ signer, account, chainOk, setError }) {
+function ErrorLine({ msg }) {
+  if (!msg) return null;
+  return <p className="errline">⚠ {msg}</p>;
+}
+
+function CreateView({ signer, account, chainOk, error, setError }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [price, setPrice] = useState("0.01");
@@ -118,6 +123,7 @@ function CreateView({ signer, account, chainOk, setError }) {
       <button className="primary" disabled={busy} onClick={handleCreate}>
         {busy ? "publishing onchain…" : `publish for ${price} MON`}
       </button>
+      <ErrorLine msg={error} />
     </section>
   );
 }
@@ -186,6 +192,7 @@ function AccessView({ provider, signer, account, chainOk, setError }) {
           <input placeholder="e.g. 1" value={id} onChange={(e) => setId(e.target.value)} />
           <button className="ghost" style={{ margin: 0, width: "auto" }} onClick={loadInfo}>load</button>
         </div>
+        <ErrorLine msg={error} />
       </section>
     );
   }
@@ -214,6 +221,7 @@ function AccessView({ provider, signer, account, chainOk, setError }) {
             {busy ? "confirming payment…" : `pay ${info?.price || ""} MON to unlock`}
           </button>
           {!info?.active && <p className="status-closed">this resource is closed by its creator.</p>}
+          <ErrorLine msg={error} />
         </div>
       )}
     </section>
