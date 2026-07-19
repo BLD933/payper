@@ -80,7 +80,10 @@ function CreateView({ signer, account, chainOk, error, setError }) {
       const ev = receipt.logs.map((l) => { try { return contract.interface.parseLog(l); } catch { return null; } })
         .find((e) => e && e.name === "ResourceCreated");
       const id = ev ? ev.args.id.toString() : "?";
-      const link = `${window.location.origin}/?id=${id}`;
+      const dir = window.location.pathname.endsWith("/")
+        ? window.location.pathname
+        : window.location.pathname.slice(0, window.location.pathname.lastIndexOf("/") + 1);
+      const link = `${window.location.origin}${dir}?id=${id}`;
       setResult({ id, link, tx: receipt.hash, hash: h });
     } catch (e) {
       setError(e.reason || e.message || "create failed");
