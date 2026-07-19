@@ -189,7 +189,12 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
       setRevealed("(no on-chain content for this resource)");
       return;
     }
-    if (!has) { setRevealed("Payment required to decrypt."); return; }
+    // verify access authoritatively on-chain (avoids stale closure state)
+    try {
+      const c = new ethers.Contract(CONTRACT, PAYPER_ABI, provider || signer);
+      const allowed = account ? await c.hasAccess(id, account) : false;
+      if (!allowed) { setRevealed("Payment required to decrypt."); return; }
+    } catch (e) { setRevealed("(could not verify access on-chain)"); return; }
     try {
       const ciphertext = info.uri.slice(4); // strip "enc:"
       const plain = await decryptContent(ciphertext, info.contentHash);
