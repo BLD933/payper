@@ -151,14 +151,15 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
       if (r.creator === "0x0000000000000000000000000000000000000000") {
         setError("No resource with that ID."); setInfo(null); return;
       }
-      setInfo({
+      const infoData = {
         creator: r.creator, price: ethers.formatEther(r.price),
         active: r.active, accessCount: r.accessCount.toString(),
         contentHash: r.contentHash, uri: r.uri,
-      });
+      };
+      setInfo(infoData);
       const owned = account ? await c.hasAccess(id, account) : false;
       setHas(owned);
-      if (owned) reveal(); // already unlocked (e.g. reloaded after a failed first fetch) -> retry content
+      if (owned) reveal(infoData, id, account); // pass freshly-fetched data, avoids stale closure
     } catch (e) { setError(e.reason || e.message || "load failed"); }
   }
 
@@ -187,20 +188,23 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
     }
   }
 
-  async function reveal() {
-    if (!info?.uri || !info?.uri.startsWith("enc:")) {
+  async function reveal(i, rid, acc) {
+    const ii = i || info;
+    const rid2 = rid || id;
+    const acc2 = acc || account;
+    if (!ii?.uri || !ii?.uri.startsWith("enc:")) {
       setRevealed("(no on-chain content for this resource)");
       return;
     }
     // verify access authoritatively on-chain (avoids stale closure state)
     try {
       const c = new ethers.Contract(CONTRACT, PAYPER_ABI, provider || signer);
-      const allowed = account ? await c.hasAccess(id, account) : false;
+      const allowed = acc2 ? await c.hasAccess(rid2, acc2) : false;
       if (!allowed) { setRevealed("Payment required to decrypt."); return; }
     } catch (e) { setRevealed("(could not verify access on-chain)"); return; }
     try {
-      const ciphertext = info.uri.slice(4); // strip "enc:"
-      const plain = await decryptContent(ciphertext, info.contentHash);
+      const ciphertext = ii.uri.slice(4); // strip "enc:"
+      const plain = await decryptContent(ciphertext, ii.contentHash);
       setRevealed(plain);
     } catch (e) {
       setRevealed("(decryption failed — content may be corrupt)");
