@@ -27,8 +27,6 @@ jobs:
           node-version: 22
       - run: npm ci
       - run: npm run build
-        env:
-          VITE_API: ${{ vars.VITE_API }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/dist

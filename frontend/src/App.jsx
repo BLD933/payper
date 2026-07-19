@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { ethers } from "ethers";
-import { PAYPER_ABI, MONAD_TESTNET, hashContent } from "./abi.js";
+import { PAYPER_ABI, hashContent } from "./abi.js";
+import { encryptContent, decryptContent } from "./crypto.js";
 import { useWallet } from "./wallet.jsx";
 import contractAddr from "./contract-address.json";
 
@@ -71,20 +72,15 @@ function CreateView({ signer, account, chainOk, error, setError }) {
     setBusy(true);
     try {
       const h = await hashContent(content);
+      const ciphertext = await encryptContent(content, h); // on-chain delivery, no server
       const priceWei = ethers.parseEther(price);
       const contract = new ethers.Contract(CONTRACT, PAYPER_ABI, signer);
-      const tx = await contract.createResource(priceWei, h, "inline://" + title);
+      const tx = await contract.createResource(priceWei, h, "enc:" + ciphertext);
       const receipt = await tx.wait();
       const ev = receipt.logs.map((l) => { try { return contract.interface.parseLog(l); } catch { return null; } })
         .find((e) => e && e.name === "ResourceCreated");
       const id = ev ? ev.args.id.toString() : "?";
       const link = `${window.location.origin}/?id=${id}`;
-      try {
-        await fetch(`${import.meta.env.VITE_API || ""}/api/resource`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, title, content, creator: account }),
-        });
-      } catch (e) { /* server optional */ }
       setResult({ id, link, tx: receipt.hash, hash: h });
     } catch (e) {
       setError(e.reason || e.message || "create failed");
@@ -155,6 +151,7 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
       setInfo({
         creator: r.creator, price: ethers.formatEther(r.price),
         active: r.active, accessCount: r.accessCount.toString(),
+        contentHash: r.contentHash, uri: r.uri,
       });
       const owned = account ? await c.hasAccess(id, account) : false;
       setHas(owned);
@@ -188,16 +185,18 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
   }
 
   async function reveal() {
+    if (!info?.uri || !info?.uri.startsWith("enc:")) {
+      setRevealed("(no on-chain content for this resource)");
+      return;
+    }
+    if (!has) { setRevealed("Payment required to decrypt."); return; }
     try {
-      const r = await fetch(`${import.meta.env.VITE_API || ""}/api/resource/${id}?buyer=${account}`);
-      if (!r.ok) {
-        const j = await r.json().catch(() => ({}));
-        setRevealed(j.error === "not paid" ? "Payment not yet confirmed on-chain. Try again in a moment." : "(content unavailable)");
-        return;
-      }
-      const j = await r.json();
-      setRevealed(j.content);
-    } catch (e) { setRevealed("(content store unreachable — run `npm run server`)"); }
+      const ciphertext = info.uri.slice(4); // strip "enc:"
+      const plain = await decryptContent(ciphertext, info.contentHash);
+      setRevealed(plain);
+    } catch (e) {
+      setRevealed("(decryption failed — content may be corrupt)");
+    }
   }
 
   if (!id) {
