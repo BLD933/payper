@@ -156,7 +156,9 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
         creator: r.creator, price: ethers.formatEther(r.price),
         active: r.active, accessCount: r.accessCount.toString(),
       });
-      if (account) setHas(await c.hasAccess(id, account));
+      const owned = account ? await c.hasAccess(id, account) : false;
+      setHas(owned);
+      if (owned) reveal(); // already unlocked (e.g. reloaded after a failed first fetch) -> retry content
     } catch (e) { setError(e.reason || e.message || "load failed"); }
   }
 
