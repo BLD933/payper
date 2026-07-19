@@ -96,15 +96,22 @@ function CreateView({ signer, account, chainOk, error, setError }) {
   if (result) {
     return (
       <section className="card">
-        <h2>resource published</h2>
-        <p className="result-line">✓ id #{result.id} live on Monad · tx {SHORT(result.tx)}</p>
+        <div className="success-banner">
+          <span className="ico">✓</span>
+          <div>
+            <b>resource #{result.id} published</b>
+            <div style={{ color: "var(--text-mute)", fontSize: 12.5, fontFamily: "var(--mono)", marginTop: 2 }}>
+              tx {SHORT(result.tx)} · gated on Monad
+            </div>
+          </div>
+        </div>
         <PaymentRail creator={account} price={price} paid={false} />
         <label>shareable unlock link</label>
         <div className="row">
           <input readOnly value={result.link} />
           <button className="ghost" style={{ margin: 0, width: "auto" }} onClick={() => navigator.clipboard.writeText(result.link)}>copy</button>
         </div>
-        <p className="muted">content hash <code>{SHORT(result.hash)}</code> · gated until paid</p>
+        <p className="muted">content hash <code>{SHORT(result.hash)}</code> · released only after payment</p>
         <button className="ghost" onClick={() => setResult(null)}>create another</button>
       </section>
     );
@@ -121,7 +128,7 @@ function CreateView({ signer, account, chainOk, error, setError }) {
       <label>price (MON)</label>
       <input type="number" step="0.001" min="0.001" value={price} onChange={(e) => setPrice(e.target.value)} />
       <button className="primary" disabled={busy} onClick={handleCreate}>
-        {busy ? "publishing onchain…" : `publish for ${price} MON`}
+        {busy ? (<><span className="spinner" /> publishing onchain…</>) : `publish for ${price} MON`}
       </button>
       <ErrorLine msg={error} />
     </section>
@@ -133,6 +140,7 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
   const [info, setInfo] = useState(null);
   const [has, setHas] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState("idle"); // idle | pending | confirming | success | error
   const [revealed, setRevealed] = useState(null);
 
   async function loadInfo() {
@@ -158,16 +166,23 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
     setError(null);
     if (!signer) { setError("Connect your wallet."); return; }
     if (!chainOk) { setError("Switch to Monad Testnet."); return; }
+    setStatus("pending");
     setBusy(true);
     try {
       const c = new ethers.Contract(CONTRACT, PAYPER_ABI, signer);
       const priceWei = (await c.resources(id)).price;
       const tx = await c.payForAccess(id, { value: priceWei });
+      setStatus("confirming");
       await tx.wait();
       setHas(true);
+      setStatus("success");
       await reveal();
-    } catch (e) { setError(e.reason || e.message || "pay failed"); }
-    finally { setBusy(false); }
+    } catch (e) {
+      setStatus("error");
+      setError(e.reason || e.message || "pay failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function reveal() {
@@ -197,6 +212,14 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
     );
   }
 
+  const statusBadge = {
+    idle: null,
+    pending: { cls: "pending", label: "Awaiting wallet…" },
+    confirming: { cls: "pending", label: "Confirming on-chain…" },
+    success: { cls: "success", label: "Paid" },
+    error: { cls: "error", label: "Failed" },
+  }[status];
+
   return (
     <section className="card">
       <h2>resource #{id}</h2>
@@ -208,22 +231,45 @@ function AccessView({ provider, signer, account, chainOk, error, setError }) {
           <div><span>status</span><b>{info.active ? "live" : "closed"}</b></div>
         </div>
       )}
+
       {has ? (
         <div className="unlocked">
-          <h3>✅ unlocked</h3>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <span className="badge success"><span className="dot" /> unlocked</span>
+            <span className="muted" style={{ fontSize: 12.5 }}>released to your wallet only</span>
+          </div>
           <pre className="content">{revealed || "loading…"}</pre>
         </div>
       ) : (
-        <div className="paywall">
-          <p>Gated content. Pay <b>{info?.price} MON</b> to unlock instantly — on-chain, non-custodial.</p>
-          {info && <PaymentRail creator={info.creator} price={info.price} paid={false} />}
-          <button className="primary" disabled={busy || !info?.active} onClick={pay}>
-            {busy ? "confirming payment…" : `pay ${info?.price || ""} MON to unlock`}
-          </button>
-          {!info?.active && <p className="status-closed">this resource is closed by its creator.</p>}
-          <ErrorLine msg={error} />
+        <div className="paywall-card">
+          <div className="paywall-head">
+            <div className="paywall-icon">🔒</div>
+            <div>
+              <h3>Locked content</h3>
+              <p>one-time payment · instant unlock</p>
+            </div>
+          </div>
+          <div className="paywall-body">
+            <div className="pay-details">
+              <div className="row"><span className="k">amount</span><span className="v amt">{info?.price || "—"} MON</span></div>
+              <div className="row"><span className="k">network</span><span className="v">Monad Testnet</span></div>
+              <div className="row"><span className="k">creator</span><span className="v">{SHORT(info?.creator)}</span></div>
+              <div className="row"><span className="k">method</span><span className="v">on-chain · non-custodial</span></div>
+            </div>
+            {info && <PaymentRail creator={info.creator} price={info.price} paid={false} />}
+            <button className="primary" disabled={busy || !info?.active} onClick={pay}>
+              {busy ? (<><span className="spinner" /> {status === "confirming" ? "confirming payment…" : "processing…"}</>) : `pay ${info?.price || ""} MON to unlock`}
+            </button>
+            {statusBadge && <div style={{ marginTop: 12 }}><span className={`badge ${statusBadge.cls}`}><span className="dot" /> {statusBadge.label}</span></div>}
+            {!info?.active && <p className="status-closed">this resource is closed by its creator.</p>}
+            <div className="notice">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+              <span>Payment goes directly to the creator's wallet. PayPer never holds your funds — access is enforced by the smart contract.</span>
+            </div>
+          </div>
         </div>
       )}
+      <ErrorLine msg={error} />
     </section>
   );
 }

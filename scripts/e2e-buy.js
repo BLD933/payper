@@ -1,0 +1,22 @@
+const { ethers } = require("ethers");
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
+const RPC = "https://testnet-rpc.monad.xyz";
+const C = "0x68f6756c45C57619dF80618a0872F5D5DD289Bd8";
+const ABI = ["function payForAccess(uint256 id) external payable returns (bool)","function hasAccess(uint256,address) view returns(bool)","function resources(uint256) view returns (address,uint256,bytes32,string,bool,uint256,uint256)"];
+(async () => {
+  const deployer = new ethers.Wallet(process.env.PRIVATE_KEY, new ethers.JsonRpcProvider(RPC));
+  const buyer = ethers.Wallet.createRandom().connect(deployer.provider);
+  await (await deployer.sendTransaction({ to: buyer.address, value: ethers.parseEther("0.05") })).wait();
+  console.log("buyer:", buyer.address, "bal:", ethers.formatEther(await deployer.provider.getBalance(buyer.address)));
+  const c = new ethers.Contract(C, ABI, buyer);
+  const res = await c.resources(11);
+  const price = res[1];
+  console.log("price wei:", price.toString(), "formatted:", ethers.formatEther(price));
+  const tx = await c.payForAccess(11, { value: price });
+  await tx.wait();
+  console.log("paid. hasAccess:", await c.hasAccess(11, buyer.address));
+  const TUNNEL = "https://8bb2-105-72-199-33.ngrok-free.app";
+  const r = await fetch(`${TUNNEL}/api/resource/11?buyer=${buyer.address}`);
+  const j = await r.json();
+  console.log("REVEAL STATUS:", r.status, "CONTENT:", JSON.stringify(j.content));
+})().catch(e => { console.error("FAIL:", e.reason || e.message); process.exit(1); });
