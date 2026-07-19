@@ -57,10 +57,14 @@ export function WalletProvider({ children }) {
 
   useEffect(() => {
     if (window.ethereum) {
+      // eager reconnect if the wallet is already authorized (no prompt)
+      window.ethereum.request?.({ method: "eth_accounts" })
+        .then((a) => { if (a && a.length) connect(); })
+        .catch(() => {});
       window.ethereum.on?.("accountsChanged", (a) => setAccount(a[0] || null));
       window.ethereum.on?.("chainChanged", () => window.location.reload());
     }
-  }, []);
+  }, [connect]);
 
   return (
     <WalletContext.Provider value={{ account, provider, signer, chainOk, error, connect, switchToMonad, setError }}>

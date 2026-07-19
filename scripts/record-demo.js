@@ -23,20 +23,14 @@ const ABI = [
 
   const browser = await chromium.launch({ channel: "chrome", headless: true });
   const context = await browser.newContext({ viewport: { width: 1100, height: 800 }, recordVideo: { dir: "demo", size: { width: 1100, height: 800 } } });
-  const page = await context.newPage();
 
-  await page.goto(APP, { waitUntil: "networkidle" });
-  await page.waitForTimeout(1500);
-  await page.screenshot({ path: "demo/01-landing.png" });
-
-  // ---- Connect (mock wallet) ----
-  // We inject window.ethereum with real signing by relaying to a local proxy.
-  await page.evaluate((addr) => {
+  // Inject the mock wallet BEFORE any page loads so the app's eager-reconnect fires on every navigation/reload.
+  await context.addInitScript((addr) => {
     window.ethereum = {
       isMetaMask: true,
       chainId: "0x279f",
       selectedAddress: addr,
-      request: async ({ method, params }) => {
+      request: async ({ method }) => {
         if (method === "eth_requestAccounts" || method === "eth_accounts") return [addr];
         if (method === "eth_chainId") return "0x279f";
         if (method === "wallet_switchEthereumChain") return null;
@@ -44,12 +38,18 @@ const ABI = [
       },
       on: () => {},
     };
-    window.dispatchEvent(new Event("ethereum#initialized"));
   }, wallet.address);
 
-  // Click Connect Wallet
-  await page.getByText("Connect Wallet").click();
-  await page.waitForTimeout(800);
+  const page = await context.newPage();
+
+  await page.goto(APP, { waitUntil: "networkidle" });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: "demo/01-landing.png" });
+
+  // ---- Wallet auto-connects (eager reconnect + injected mock). Click is a no-op fallback. ----
+  const connectBtn = page.getByText("Connect Wallet");
+  if (await connectBtn.count()) { await connectBtn.click().catch(() => {}); }
+  await page.waitForTimeout(1000);
 
   // ---- Create a resource (we perform the tx via ethers, then surface the link in UI) ----
   const price = ethers.parseEther("0.01");
@@ -67,7 +67,7 @@ const ABI = [
   console.log("created id", id);
 
   // Fill the create form and "publish" (form publish will fail signing, so we just show the link)
-  await page.fill('input[placeholder="e.g. My secret trading prompt"]', "My secret trading prompt");
+  await page.fill('input[placeholder="e.g. my secret trading prompt"]', "my secret trading prompt");
   await page.fill('textarea', content);
   await page.screenshot({ path: "demo/02-create.png" });
   await page.waitForTimeout(500);
